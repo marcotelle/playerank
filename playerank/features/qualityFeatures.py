@@ -4,6 +4,8 @@ import json
 from collections import defaultdict
 import glob
 
+TOUCH_TAGS = [1401, 1302, 201, 1901, 1301, 2001, 301]
+EVENTS = ['Duel', 'Foul', 'Free Kick', 'Goalkeeper leaving line', 'Offside', 'Others on the ball', 'Pass', 'Shot']
 
 class qualityFeatures(Feature):
     """
@@ -24,35 +26,6 @@ class qualityFeatures(Feature):
         Output:
         list of dictionaries in the format: matchId -> entity -> feature -> value
         """
-        event2subevent2outcome={
-                1:{10: [1801, 1802],
-                 11: [1801, 1802],
-                 12: [1801, 1802],
-                 13: [1801, 1802]},
-                 2: [1702, 1703, 1701], #fouls aggregated into macroevent
-
-                 3 :{30: [1801, 1802],
-                 31: [1801, 1802],
-                 32: [1801, 1802],
-                 33: [1801, 1802],
-                 34: [1801, 1802],
-                 35: [1802],
-                 36: [1801, 1802]},
-                 4: {40: [1801, 1802]},
-                 6: {60: []},
-                 7: {70: [1801, 1802,101],
-                 71: [1801, 1802,101],
-                 72: [1401, 1302, 201, 1901, 1301, 2001, 301]},
-                 8: {80: [1801, 1802,302,301],
-                 81: [1801, 1802,302,301],
-                 82: [1801, 1802,302,301],
-                 83: [1801, 1802,302,301],
-                 84: [1801, 1802,302,301],
-                 85: [1801, 1802,302,301],
-                 86: [1801, 1802,302,301]},
-                 #90: [1801, 1802],
-                 #91: [1801, 1802],
-                 10: {100: [1801, 1802]}}
 
         aggregated_features = defaultdict(lambda : defaultdict(lambda: defaultdict(int)))
 
@@ -62,40 +35,70 @@ class qualityFeatures(Feature):
                                 if player['role']['name']=='Goalkeeper']
 
         events = []
-        for file in glob.glob("%s"%events_path):
-            data = json.load(open(file))
-            if select:
-                data = list(filter(select,data))
-            events += list(filter(lambda x: x['matchPeriod'] in ['1H','2H'] and x['playerId'] not in  goalkeepers_ids,data)) #excluding penalties events
-            print ("[qualityFeatures] added %s events from %s"%(len(data), file))
-        
+        for event in events_path:
+            if event.period in ['1H','2H'] and event.player_id not in goalkeepers_ids:
+                events.append(event)
+        print ("[qualityFeatures] added %s events"%len(events))
 
         for evt in events:
-            if evt['eventId'] in event2subevent2outcome:
-                ent = evt['teamId'] #default
+            labelSplit = evt.label.split("-")
+            if labelSplit[0] in EVENTS: 
+                ent = evt.team_id
                 if entity == 'player':
-                    ent = evt['playerId']
+                    ent = evt.player_id
 
-                evtName =evt['eventName']
 
-                if type(event2subevent2outcome[evt['eventId']]) == dict:
-                    #hierarchy as event->subevent->tags
-                    if evt['subEventId'] not in event2subevent2outcome[evt['eventId']]:
-                        #malformed events
-                        continue #skip to next event
-                    tags = [x for x in evt['tags'] if x['id'] in event2subevent2outcome[evt['eventId']][evt['subEventId']]]
+                # eventi OTHERS ON THE BALL 
+                if labelSplit[0] == 'Others on the ball':
+                    evtName = evt.label
+                    tags = []
+                    if labelSplit[1] == 'Touch':
+                        for tag in evt.tags:
+                            if tag in TOUCH_TAGS:
+                                tags.append(tag)
+                    elif labelSplit[1] in ['Acceleration', 'Clearance']:
+                        for tag in evt.tags:
+                            if tag == 101:
+                                tags.append(tag)
 
-                    evtName+="-%s"%evt['subEventName']
+                    if len(tags)>0:
+                        for tag in tags:
+                            aggregated_features[evt.match_id][ent]["%s-%s"%(evtName, tag2name[tag])]+=1
+                    else:
+                        aggregated_features[evt.match_id][ent]["%s"%(evtName)]+=1
+                
+                # eventi PASS
+                elif labelSplit[0] == 'Pass':
+                    evtName = evt.label
+                    if evt.is_assist:
+                        aggregated_features[evt.match_id][ent]["%s-assist"%evtName]+=1
+                    if evt.is_keypass:
+                        aggregated_features[evt.match_id][ent]["%s-key pass"%evtName]+=1
+
+                # eventi FOUL
+                elif labelSplit[0] == 'Foul':
+                    evtName = labelSplit[0]
+
+                    if evt.penalty_card != None:
+                        aggregated_features[evt.match_id][ent]["%s-%s"%(evtName, evt.penalty_card)]+=1
+
+                # eventi OFFSIDE
+                elif labelSplit[0] == 'Offside':
+                    evtName = evt.label
+                    aggregated_features[evt.match_id][ent]["%s"%(evtName)]+=1
+
+                # eventi DUEL, SHOT; FREE KICK
                 else:
-                    #hierarchy as event->tags
-                    tags = [x for x in evt['tags'] if x['id'] in event2subevent2outcome[evt['eventId']]]
+                    evtName = evt.label
 
-                if len(tags)>0:
-                    for tag in tags:
-                        aggregated_features[evt['matchId']][ent]["%s-%s"%(evtName,tag2name[tag['id']])]+=1
+                # tutti gli eventi con tag accurate, not accurate (tranne touch)
+                if labelSplit[1] != 'Touch':
+                    if evt.outcome == 'SUCCESS':
+                        aggregated_features[evt.match_id][ent]["%s-accurate"%evtName]+=1
+                    elif evt.outcome == 'FAILURE':
+                        aggregated_features[evt.match_id][ent]["%s-not accurate"%evtName]+=1
 
-                else:
-                    aggregated_features[evt['matchId']][ent]["%s"%(evtName)]+=1
+
         result =[]
         for match in aggregated_features:
             for entity in aggregated_features[match]:

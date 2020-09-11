@@ -27,31 +27,24 @@ class centerOfPerformanceFeature(Feature):
         """
 
 
-        events = []
-        for file in glob.glob("%s"%events_path):
-            data = json.load(open(file))
-            if select:
-                data = list(filter(select,data))
-            events += data
-            print ("[centerOfPerformanceFeature] added %s events from %s"%(len(data),file))
-        events = filter(lambda x: x['playerId']!=0,events) #filtering out referee
-        if select:
-            events = filter(select,events)
         players =  json.load(open(players_file))
-
         goalkeepers_ids = {player['wyId']:'GK' for player in players
                                 if player['role']['name']=='Goalkeeper'}
-        events = filter(lambda x: x['playerId'] not in goalkeepers_ids,events )
+        events = []
+        for event in events_path:
+            if event.player_id != 0 and event.player_id not in goalkeepers_ids:
+                events.append(event)
+        print ("[centerOfPerformanceFeature] added %s events"%len(events))
         aggregated_features = defaultdict(lambda : defaultdict(lambda: defaultdict(int)))
 
         MIN_EVENTS = 10
         players_positions = defaultdict(lambda : defaultdict(list))
         for evt in events:
-            if 'positions' in evt:
-                player = evt['playerId']
-                match = evt['matchId']
-                position = (evt['positions'][0]['x'],evt['positions'][0]['y'])
-                players_positions[match][player].append(position)
+            player = evt.player_id
+            match = evt.match_id
+            position = (evt.start_position.x,evt.start_position.y)
+            players_positions[match][player].append(position)
+
 
 
         #formatting features as json document
