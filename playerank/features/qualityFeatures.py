@@ -46,8 +46,11 @@ class qualityFeatures(Feature):
                 ent = evt.team_id
                 if entity == 'player':
                     ent = evt.player_id
+                
 
+                aggregated_features[evt.match_id][ent]["%s"%evt.label]+=1
 
+                '''
                 # eventi OTHERS ON THE BALL 
                 if labelSplit[0] == 'Others on the ball':
                     evtName = evt.label
@@ -97,6 +100,7 @@ class qualityFeatures(Feature):
                         aggregated_features[evt.match_id][ent]["%s-accurate"%evtName]+=1
                     elif evt.outcome == 'FAILURE':
                         aggregated_features[evt.match_id][ent]["%s-not accurate"%evtName]+=1
+                '''
 
 
         result =[]
