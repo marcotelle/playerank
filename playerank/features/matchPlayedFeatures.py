@@ -27,46 +27,22 @@ class matchPlayedFeatures(Feature):
         #  filtering out all the events from goalkeepers
         goalkeepers_ids = [player['wyId'] for player in players
                                 if player['role']['name']=='Goalkeeper']
-        matches= []
-        for file in glob.glob("%s"%matches_path):
-            matches += json.load(open(file))
-        if select:
-            matches = list(filter(select,matches))
-
-        print ("[matchPlayedFeatures] processing %s matches"%len(matches))
+        
+        print ("[matchPlayedFeatures] processing %s matches"%len(matches_path))
         result = []
-        for match in matches:
-            matchId= match['wyId']
-            duration = 90
-            if match['duration'] != 'Regular':
-                duration = 120
+        for id,match in matches_path.items():
+            timestamp = match.date_utc
 
-            timestamp = match['dateutc']
-
-            for team in match['teamsData']:
+            for team in [match.home_team, match.away_team]:
                 minutes_played = {}
                 goals_scored = {}
-                if 'substitutions' in match['teamsData'][team]['formation']:
-                    for sub in match['teamsData'][team]['formation']['substitutions']:
-                        if type(sub) == dict:
-                            minute = sub['minute']
-                            minutes_played[sub['playerOut']] = minute
-                            minutes_played[sub['playerIn']] = duration - minute
-                if 'lineup' in match['teamsData'][team]['formation']:
-                    for player in match['teamsData'][team]['formation']['lineup']:
-                        goals_scored[player['playerId']] = player['goals']
-                        if player['playerId'] not in minutes_played:
-                            #player not substituted
-                            minutes_played[player['playerId']] = duration
-                if 'bench' in match['teamsData'][team]['formation']:
-                    for player in match['teamsData'][team]['formation']['bench']:
-                        goals_scored[player['playerId']] = player['goals']
-                        if player['playerId'] not in minutes_played:
-                            #player not substituted
-                            minutes_played[player['playerId']] = duration
+                for player in team.formation.lineup+team.formation.bench:
+                    minutes_played[player.player_id] = player.played_minutes
+                    goals_scored[player.player_id] = player.goals
+
                 for player,min in minutes_played.items():
                     if player not in goalkeepers_ids:
-                        document = {'match':matchId,'entity':player,'feature':'minutesPlayed',
+                        document = {'match':id,'entity':player,'feature':'minutesPlayed',
                                 'value': min}
                         result.append (document)
 
@@ -76,17 +52,17 @@ class matchPlayedFeatures(Feature):
                             gs = int(gs)
                         except:
                             gs = 0
-                        document = {'match':matchId,'entity':player,'feature':'goalScored',
+                        document = {'match':id,'entity':player,'feature':'goalScored',
                                 'value': gs}
                         result.append (document)
                         ## adding timestamp and team for each player
-                        document = {'match':matchId,'entity':player,'feature':'timestamp',
+                        document = {'match':id,'entity':player,'feature':'timestamp',
                             'value': timestamp}
 
                         result.append (document)
                         ## adding timestamp and team for each player
-                        document = {'match':matchId,'entity':player,'feature':'team',
-                                'value': team}
+                        document = {'match':id,'entity':player,'feature':'team',
+                                'value': team.team_id}
                         result.append (document)
         print ("[matchPlayedFeatures] matches features computed. %s features processed"%(len(result)))
         return result
