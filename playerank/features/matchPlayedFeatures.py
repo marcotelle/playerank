@@ -6,14 +6,14 @@ import glob
 
 class matchPlayedFeatures(Feature):
 
-    def createFeature(self,matches_path,players_file,select = None):
+    def createFeature(self,serialized_matches,players_file,select = None):
         """
         It computes, for each player and match, total time (in minutes) played,
         goals scored and
 
 
         Input:
-        -matches_path: folder with json files corresponding to matches data
+        -serialized_matches: folder with json files corresponding to matches data
         -select: function  for filtering matches collection. Default: aggregate over all matches
 
         Output:
@@ -28,9 +28,9 @@ class matchPlayedFeatures(Feature):
         goalkeepers_ids = [player['wyId'] for player in players
                                 if player['role']['name']=='Goalkeeper']
         
-        print ("[matchPlayedFeatures] processing %s matches"%len(matches_path))
+        print ("[matchPlayedFeatures] processing %s matches"%len(serialized_matches))
         result = []
-        for id,match in matches_path.items():
+        for id,match in serialized_matches.items():
             timestamp = match.date_utc
 
             for team in [match.home_team, match.away_team]:

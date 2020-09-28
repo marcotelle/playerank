@@ -8,12 +8,12 @@ from collections import defaultdict
 class centerOfPerformanceFeature(Feature):
 
 
-    def createFeature(self, events_path, players_file, select = None):
+    def createFeature(self, serialized_events, players_file, select = None):
 
         """
         compute centerOfPerformanceFeatures
         parameters:
-        -events_path: folder path of events file
+        -serialiazed_events: folder path of events file
         -players_file: file path of players data file
         -select: function  for filtering matches collection. Default: aggregate over all matches
         -entity: it could either 'team' or 'player'.
@@ -31,11 +31,10 @@ class centerOfPerformanceFeature(Feature):
         goalkeepers_ids = {player['wyId']:'GK' for player in players
                                 if player['role']['name']=='Goalkeeper'}
         events = []
-        for event in events_path:
+        for event in serialized_events:
             if event.player_id != 0 and event.player_id not in goalkeepers_ids:
                 events.append(event)
         print ("[centerOfPerformanceFeature] added %s events"%len(events))
-        aggregated_features = defaultdict(lambda : defaultdict(lambda: defaultdict(int)))
 
         MIN_EVENTS = 10
         players_positions = defaultdict(lambda : defaultdict(list))
